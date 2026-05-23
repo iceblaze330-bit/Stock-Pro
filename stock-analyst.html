@@ -11,6 +11,18 @@
 body{background:#080c10;color:white;font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-bottom:80px}
 body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 10%,rgba(0,40,25,.7) 0%,transparent 55%),radial-gradient(ellipse at 85% 90%,rgba(0,15,50,.7) 0%,transparent 55%);pointer-events:none;z-index:0}
 #app{position:relative;z-index:1}
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:#080c10;z-index:999;display:flex;align-items:center;justify-content:center}
+#login-screen::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 10%,rgba(0,40,25,.7) 0%,transparent 55%),radial-gradient(ellipse at 85% 90%,rgba(0,15,50,.7) 0%,transparent 55%);pointer-events:none}
+#login-box{position:relative;z-index:1;width:100%;max-width:360px;padding:0 24px;text-align:center;animation:fadeIn .5s ease both}
+#login-logo-sub{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.22em;color:#00ff88;margin-bottom:4px}
+#login-logo-title{font-family:'Space Mono',monospace;font-size:1.5rem;font-weight:700;color:#fff;margin-bottom:40px}
+#login-label{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.14em;color:rgba(255,255,255,.35);text-transform:uppercase;margin-bottom:16px}
+#login-input{width:100%;padding:15px 18px;background:rgba(255,255,255,.04);border:1px solid rgba(0,255,136,.2);border-radius:8px;color:white;font-family:'Space Mono',monospace;font-size:1.2rem;font-weight:700;letter-spacing:.25em;text-align:center;outline:none;transition:border-color .2s,box-shadow .2s;margin-bottom:14px}
+#login-input:focus{border-color:rgba(0,255,136,.55);box-shadow:0 0 0 3px rgba(0,255,136,.08)}
+#login-btn{width:100%;padding:14px;background:linear-gradient(135deg,#00ff88,#00d4ff);border:none;border-radius:8px;color:#080c10;font-family:'Space Mono',monospace;font-weight:700;font-size:.85rem;letter-spacing:.08em;cursor:pointer;transition:opacity .2s}
+#login-btn:hover{opacity:.9}
+#login-error{display:none;margin-top:12px;color:#ff7070;font-size:.78rem;font-family:'Space Mono',monospace;letter-spacing:.05em}
 
 /* HEADER */
 #header{padding:20px 36px;border-bottom:1px solid rgba(0,255,136,.1);background:rgba(0,0,0,.4);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
@@ -99,6 +111,16 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </style>
 </head>
 <body>
+<div id="login-screen">
+  <div id="login-box">
+    <div id="login-logo-sub">WALL STREET</div>
+    <div id="login-logo-title">EQUITY ANALYST</div>
+    <div id="login-label">請輸入密碼</div>
+    <input id="login-input" type="password" placeholder="••••" maxlength="20" autocomplete="off"/>
+    <button id="login-btn">進入 →</button>
+    <div id="login-error">密碼錯誤，請再試一次</div>
+  </div>
+</div>
 <div id="app">
 
   <!-- Header -->
@@ -597,6 +619,52 @@ function showResult(data, tabId) {
     resultPanel.querySelectorAll('.section-card').forEach(el => el.classList.add('visible'));
   }, 60);
 }
+
+// ── Login ─────────────────────────────────────────────────────────
+(async function() {
+  const screen   = document.getElementById('login-screen');
+  const loginBtn = document.getElementById('login-btn');
+  const loginInput = document.getElementById('login-input');
+  const loginError = document.getElementById('login-error');
+
+  // Check session
+  if (sessionStorage.getItem('auth') === '1') {
+    screen.style.display = 'none';
+    return;
+  }
+
+  async function tryLogin() {
+    const pw = loginInput.value.trim();
+    if (!pw) return;
+    loginBtn.disabled = true;
+    loginBtn.textContent = '驗證中…';
+    try {
+      const resp = await fetch('/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        sessionStorage.setItem('auth', '1');
+        screen.style.display = 'none';
+      } else {
+        loginError.style.display = 'block';
+        loginInput.value = '';
+        loginInput.focus();
+      }
+    } catch(e) {
+      loginError.textContent = '連線失敗，請重試';
+      loginError.style.display = 'block';
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = '進入 →';
+    }
+  }
+
+  loginBtn.addEventListener('click', tryLogin);
+  loginInput.addEventListener('keydown', e => { if(e.key==='Enter') tryLogin(); });
+})();
 
 function showError(msg) { errBox.textContent=msg; errBox.style.display='block'; }
 function clearError()    { errBox.textContent='';  errBox.style.display='none';  }

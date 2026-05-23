@@ -5,6 +5,7 @@ import json
 import os
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 PORT = int(os.environ.get("PORT", 8888))
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
 
@@ -30,6 +31,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404, "stock-analyst.html not found")
 
     def do_POST(self):
+        if self.path == "/auth":
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length))
+            ok = body.get("password", "") == APP_PASSWORD
+            out = json.dumps({"ok": ok}).encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(out)
+            return
+
         if self.path != "/api":
             self.send_error(404)
             return
