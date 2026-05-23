@@ -301,14 +301,14 @@ function card(icon, label, body, delay=0) {
 
 function renderOverview(d) {
   const items = [
-    ['🏢','商業模式與收入來源',d.business],
-    ['🏰','競爭優勢（護城河）',d.moat],
-    ['📈','產業趨勢',d.industry],
-    ['💰','財務健康狀況',d.financials],
-    ['⚠️','關鍵風險',d.risks],
-    ['⚖️','估值比較',d.valuation],
-    ['🎯','多頭・空頭・基本情境',d.scenarios],
-    ['🔭','未來 12–24 個月展望',d.outlook],
+    ['🏢','商業模式與收入來源',flattenValue(d.business)],
+    ['🏰','競爭優勢（護城河）',flattenValue(d.moat)],
+    ['📈','產業趨勢',flattenValue(d.industry)],
+    ['💰','財務健康狀況',flattenValue(d.financials)],
+    ['⚠️','關鍵風險',flattenValue(d.risks)],
+    ['⚖️','估值比較',flattenValue(d.valuation)],
+    ['🎯','多頭・空頭・基本情境',flattenValue(d.scenarios)],
+    ['🔭','未來 12–24 個月展望',flattenValue(d.outlook)],
   ];
   return items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
 }
@@ -325,7 +325,7 @@ function renderFinancials(d) {
   const verdictColor = (d.verdict||'').includes('強') ? '#00ff88' : '#ff6060';
   const verdictHtml = `<div class="section-card visible" style="border-color:${verdictColor}33;margin-bottom:14px">
     <div class="card-head"><span class="card-icon">🩺</span><span class="card-label" style="color:${verdictColor}">財務體質判斷</span></div>
-    <div class="card-body">${esc(d.verdict||'—')}</div>
+    <div class="card-body">${esc(flattenValue(d.verdict)||'—')}</div>
   </div>`;
   return verdictHtml + items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
 }
@@ -375,16 +375,16 @@ function renderDebate(d) {
   const debateHtml = `<div class="debate-wrap section-card visible" style="padding:0;border:none;background:none">
     <div class="bull-card">
       <div class="debate-label bull-label">📈 ${esc(d.bullName||'多頭分析師')} — 看漲</div>
-      <div class="debate-body">${esc(d.bullArgs||'—')}</div>
+      <div class="debate-body">${esc(flattenValue(d.bullArgs)||'—')}</div>
     </div>
     <div class="bear-card">
       <div class="debate-label bear-label">📉 ${esc(d.bearName||'空頭分析師')} — 看跌</div>
-      <div class="debate-body">${esc(d.bearArgs||'—')}</div>
+      <div class="debate-body">${esc(flattenValue(d.bearArgs)||'—')}</div>
     </div>
   </div>
   <div class="conclusion-card section-card visible">
     <div class="conclusion-label">⚖️ 中性結論</div>
-    <div class="conclusion-body">${esc(d.conclusion||'—')}</div>
+    <div class="conclusion-body">${esc(flattenValue(d.conclusion)||'—')}</div>
   </div>`;
   return debateHtml + disclaimer();
 }
@@ -468,9 +468,12 @@ async function runTab(sym, tabId) {
   showLoading(tab.loadingMsg);
 
   try {
+    const token = sessionStorage.getItem('authToken') || '';
+    const headers = {'Content-Type':'application/json'};
+    if (token) headers.Authorization = 'Bearer ' + token;
     const resp = await fetch('/api', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers,
       body: JSON.stringify({ system: tab.system, user: tab.prompt(sym) }),
     });
     if (!resp.ok) { const t=await resp.text(); throw new Error(`API 錯誤 ${resp.status}: ${t}`); }
@@ -509,6 +512,23 @@ function extractJSON(raw) {
 
   // 4. Nothing worked
   throw new Error('無法解析 AI 回應，請再試一次');
+}
+
+// Flatten any value to a readable string
+function flattenValue(val) {
+  if (val === null || val === undefined) return '—';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) return val.map(flattenValue).join('\n');
+  if (typeof val === 'object') {
+    return Object.entries(val)
+      .map(([k, v]) => {
+        const label = k.charAt(0).toUpperCase() + k.slice(1);
+        return label + '：' + flattenValue(v);
+      })
+      .join('\n\n');
+  }
+  return String(val);
 }
 
 function makeTVWidget(containerId, scriptSrc, options) {
@@ -648,8 +668,8 @@ function showResult(data, tabId) {
   const loginInput = document.getElementById('login-input');
   const loginError = document.getElementById('login-error');
 
-  // Check session
-  if (sessionStorage.getItem('auth') === '1') {
+  // Check session. Require token when password protection is enabled.
+  if (sessionStorage.getItem('auth') === '1' && sessionStorage.getItem('authToken') !== null) {
     screen.style.display = 'none';
     return;
   }
@@ -668,6 +688,7 @@ function showResult(data, tabId) {
       const data = await resp.json();
       if (data.ok) {
         sessionStorage.setItem('auth', '1');
+        sessionStorage.setItem('authToken', data.token || '');
         screen.style.display = 'none';
       } else {
         loginError.style.display = 'block';

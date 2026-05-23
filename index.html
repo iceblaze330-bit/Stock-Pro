@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketPulse — 美股財經新聞</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Serif+4:wght@300;400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --ink:#0a0a0a;--ink2:#3a3532;--ink3:#7a746e;--paper:#f8f4ef;
+  --paper2:#f0ebe3;--paper3:#e8e0d4;--accent:#c8390a;--accent2:#1a4a7a;
+  --gold:#b8860b;--green:#1a6b3a;--red:#c8390a;
+  --serif:'Playfair Display',Georgia,serif;
+  --body:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono',monospace;
+}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);min-height:100vh}
+.masthead{background:var(--ink);color:var(--paper);padding:12px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--accent)}
+.logo{font-family:var(--serif);font-size:30px;font-weight:900;letter-spacing:-1px;color:#fff}
+.logo span{color:var(--accent)}
+.edition{font-family:var(--mono);font-size:11px;color:#999;letter-spacing:1px;margin-left:14px}
+.ticker{display:flex;gap:20px;font-family:var(--mono);font-size:12px}
+.tick{display:flex;flex-direction:column;align-items:flex-end}
+.tick-sym{color:#aaa;font-size:10px;letter-spacing:1px}
+.tick-val{color:#fff;font-weight:600}
+.up{color:#4caf50}.dn{color:#ef5350}
+.subbar{background:var(--paper2);border-bottom:1px solid var(--paper3);padding:10px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.si{padding:7px 12px;border:1.5px solid var(--paper3);border-radius:4px;font-family:var(--body);font-size:14px;background:#fff;color:var(--ink);outline:none;width:250px}
+.si:focus{border-color:var(--accent2)}
+.sb{padding:7px 16px;background:var(--accent2);color:#fff;border:none;border-radius:4px;font-size:13px;cursor:pointer}
+.wl-label{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:1px;white-space:nowrap}
+.tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tag-btn{padding:4px 10px;border:1px solid var(--paper3);border-radius:20px;font-family:var(--mono);font-size:11px;cursor:pointer;background:#fff;color:var(--ink2);transition:all .15s}
+.tag-btn:hover{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+.add-btn{padding:4px 8px;border:1px dashed var(--ink3);border-radius:20px;font-family:var(--mono);font-size:11px;cursor:pointer;color:var(--ink3);background:transparent}
+.add-btn:hover{border-color:var(--accent);color:var(--accent)}
+.layout{display:grid;grid-template-columns:1fr 265px;max-width:1140px;margin:0 auto}
+.main-col{border-right:1px solid var(--paper3);padding:28px}
+.side-col{padding:22px 18px}
+.sec-head{display:flex;align-items:center;gap:10px;margin-bottom:22px;padding-bottom:10px;border-bottom:2px solid var(--ink)}
+.sec-title{font-family:var(--serif);font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase}
+.sec-line{flex:1;height:1px;background:var(--paper3)}
+.live{font-family:var(--mono);font-size:9px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:10px;letter-spacing:1px;animation:pb 2s ease-in-out infinite}
+@keyframes pb{0%,100%{opacity:1}50%{opacity:.55}}
+.cnt{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.ntag{font-family:var(--mono);font-size:9px;letter-spacing:2px;font-weight:600;margin-bottom:7px;text-transform:uppercase}
+.ntag.fed{color:var(--accent)}.ntag.earnings{color:var(--green)}.ntag.market{color:var(--accent2)}
+.ntag.energy{color:var(--gold)}.ntag.crypto{color:#7b5ea7}.ntag.trade{color:#5a7a3a}.ntag.macro{color:#8a4a2a}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px;flex-shrink:0}
+.dot.up{background:var(--green)}.dot.dn{background:var(--red)}.dot.neu{background:var(--gold)}
+.meta{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+/* hero */
+.hero-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:1px;background:var(--paper3);margin-bottom:1px}
+.hero-main{background:var(--paper);padding:22px 26px 22px 0;cursor:pointer;transition:background .15s}
+.hero-main:hover{background:var(--paper2)}
+.hero-main h2{font-family:var(--serif);font-size:23px;font-weight:900;line-height:1.28;color:var(--ink);margin-bottom:10px}
+.hero-excerpt{font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:12px}
+.hero-stack{display:flex;flex-direction:column;gap:1px}
+.mini{background:var(--paper);padding:14px 16px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+.mini:hover{background:var(--paper2);border-left-color:var(--accent2)}
+.mini h3{font-family:var(--serif);font-size:13px;font-weight:700;line-height:1.35;margin-bottom:5px}
+.card-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--paper3);margin-top:1px}
+.card{background:var(--paper);padding:16px;cursor:pointer;transition:background .15s}
+.card:hover{background:var(--paper2)}
+.card h4{font-family:var(--serif);font-size:13px;font-weight:700;line-height:1.35;margin-bottom:6px}
+.list-wrap{margin-top:1px}
+.list-row{background:var(--paper);border-bottom:1px solid var(--paper2);padding:11px 15px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;transition:background .15s}
+.list-row:hover{background:var(--paper2)}
+.list-title{font-family:var(--serif);font-size:13px;line-height:1.35}
+.list-src{font-family:var(--mono);font-size:10px;color:var(--ink3);white-space:nowrap;margin-top:3px}
+/* loading/error */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px}
+.spinner{width:28px;height:28px;border:2px solid var(--paper3);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltext{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.err-box{padding:20px;background:#fff8f6;border-left:4px solid var(--accent);border-radius:4px;margin:8px 0}
+.err-title{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
+.err-msg{font-size:13px;color:var(--ink2);line-height:1.6}
+.retry{margin-top:10px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px}
+/* sidebar */
+.sw{margin-bottom:28px}
+.sw-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--ink3);font-weight:600;padding-bottom:8px;border-bottom:1px solid var(--paper3);margin-bottom:12px}
+.wi{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--paper2);cursor:pointer}
+.wi:hover{background:var(--paper2)}
+.wsym{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent2)}
+.wname{font-size:10px;color:var(--ink3)}
+.wprice{font-family:var(--mono);font-size:13px;font-weight:600}
+.wchg{font-family:var(--mono);font-size:11px}
+.sni{padding:9px 0;border-bottom:1px solid var(--paper2);cursor:pointer}
+.snt{font-family:var(--serif);font-size:12px;line-height:1.4;margin-bottom:3px;transition:color .15s}
+.sni:hover .snt{color:var(--accent2)}
+.snm{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.footer{font-family:var(--mono);font-size:10px;color:var(--ink3);text-align:center;padding:14px;border-top:1px solid var(--paper3);margin-top:4px}
+/* modal */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+.mo.open{display:flex}
+.mb{background:#fff;padding:26px;border-radius:4px;width:320px;border-top:4px solid var(--accent)}
+.mt{font-family:var(--serif);font-size:18px;font-weight:700;margin-bottom:16px}
+.mi{width:100%;padding:9px 12px;border:1.5px solid var(--paper3);border-radius:4px;font-family:var(--mono);font-size:15px;text-transform:uppercase;outline:none;margin-bottom:12px}
+.mi:focus{border-color:var(--accent2)}
+.mbtns{display:flex;gap:8px;justify-content:flex-end}
+.bc{padding:7px 14px;border:1px solid var(--paper3);border-radius:4px;background:#fff;cursor:pointer;font-size:13px}
+.bok{padding:7px 16px;border:none;border-radius:4px;background:var(--accent2);color:#fff;cursor:pointer;font-size:13px}
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr}.side-col{display:none}
+  .hero-grid{grid-template-columns:1fr}.hero-stack{display:none}
+  .card-row{grid-template-columns:1fr 1fr}
+  .ticker{display:none}.edition{display:none}
+  .main-col{padding:16px}
+}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div style="display:flex;align-items:baseline">
+    <div class="logo">Market<span>Pulse</span></div>
+    <div class="edition" id="ed"></div>
+  </div>
+  <div class="ticker">
+    <div class="tick"><span class="tick-sym">DOW</span><span class="tick-val">50,580</span><span class="up">+0.58%</span></div>
+    <div class="tick"><span class="tick-sym">S&P 500</span><span class="tick-val">7,445</span><span class="up">+0.17%</span></div>
+    <div class="tick"><span class="tick-sym">NASDAQ</span><span class="tick-val">26,293</span><span class="up">+0.09%</span></div>
+    <div class="tick"><span class="tick-sym">WTI</span><span class="tick-val">$96.35</span><span class="dn">-1.98%</span></div>
+  </div>
+</div>
+
+<div class="subbar">
+  <div style="display:flex;gap:8px">
+    <input class="si" id="q" type="text" placeholder="搜尋股票或關鍵字，如 NVDA、Fed…"/>
+    <button class="sb" onclick="doSearch()">搜尋</button>
+  </div>
+  <span class="wl-label">追蹤：</span>
+  <div class="tags" id="wl-tags"></div>
+  <button class="add-btn" onclick="openM()">＋ 新增</button>
+</div>
+
+<div class="layout">
+  <div class="main-col">
+    <div class="sec-head">
+      <span class="sec-title" id="feed-label">今日財經頭條</span>
+      <div class="sec-line"></div>
+      <span class="live">LIVE</span>
+      <span class="cnt" id="cnt"></span>
+    </div>
+    <div id="news-area">
+      <div class="loading"><div class="spinner"></div><div class="ltext">載入最新財經新聞中…</div></div>
+    </div>
+    <div class="footer" id="footer"></div>
+  </div>
+  <div class="side-col">
+    <div class="sw"><div class="sw-title">模擬行情</div><div id="prices"></div></div>
+    <div class="sw"><div class="sw-title">快訊</div><div id="side-news"></div></div>
+  </div>
+</div>
+
+<div class="mo" id="modal">
+  <div class="mb">
+    <div class="mt">新增追蹤股票</div>
+    <input class="mi" id="mi" placeholder="輸入代號，如 AMZN" maxlength="10"/>
+    <div class="mbtns">
+      <button class="bc" onclick="closeM()">取消</button>
+      <button class="bok" onclick="confirmAdd()">新增</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 日期
+const now = new Date();
+document.getElementById('ed').textContent =
+  ' · ' + now.toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+// 模擬行情
+const MOCK={SPY:{p:589.24,c:0.58},NVDA:{p:224.18,c:1.78},AAPL:{p:211.45,c:-0.43},TSLA:{p:178.2,c:-1.15},MSFT:{p:422.8,c:0.68},META:{p:534.6,c:1.23},AMZN:{p:196.35,c:-0.71},GOOGL:{p:178.9,c:0.34},QQQ:{p:488.75,c:1.41},WMT:{p:98.2,c:-0.82},ARM:{p:142.5,c:8.5},GME:{p:28.4,c:2.4}};
+
+let watchlist = JSON.parse(localStorage.getItem('mp_wl')||'["SPY","NVDA","AAPL","TSLA","MSFT"]');
+let currentQ = '';
+
+function saveWL(){ localStorage.setItem('mp_wl', JSON.stringify(watchlist)); }
+
+function renderWL(){
+  document.getElementById('wl-tags').innerHTML =
+    watchlist.map(s=>`<button class="tag-btn" onclick="setQ('${s}')">${s}</button>`).join('') +
+    `<button class="tag-btn" style="opacity:.55" onclick="clearQ()">全部</button>`;
+  document.getElementById('prices').innerHTML = watchlist.map(s=>{
+    const r=MOCK[s]||{p:(100+Math.random()*300),c:((Math.random()*6)-3)};
+    const u=r.c>=0;
+    return`<div class="wi" onclick="setQ('${s}')">
+      <div><div class="wsym">${s}</div><div class="wname">點擊篩選新聞</div></div>
+      <div style="text-align:right"><div class="wprice">$${r.p.toFixed(2)}</div>
+      <div class="wchg ${u?'up':'dn'}">${u?'▲':'▼'}${Math.abs(r.c).toFixed(2)}%</div></div>
+    </div>`;}).join('');
+}
+
+// helpers
+function getTagKey(t){
+  const s=t.toLowerCase();
+  if(/fed|rate|inflation|cpi|fomc|powell|warsh|monetary|yield|treasury/.test(s))return'fed';
+  if(/earnings?|profit|revenue|eps|guidance|q[1-4]|fiscal/.test(s))return'earnings';
+  if(/bitcoin|crypto|btc|eth|coin/.test(s))return'crypto';
+  if(/china|trade|tariff|export/.test(s))return'trade';
+  if(/oil|energy|crude|wti|brent|opec/.test(s))return'energy';
+  if(/gdp|unemployment|jobs|recession|macro/.test(s))return'macro';
+  return'market';
+}
+const TLABEL={fed:'FED/政策',earnings:'財報',market:'市場',energy:'能源',crypto:'加密貨幣',trade:'貿易',macro:'總經'};
+function tl(k){return TLABEL[k]||'市場';}
+function sent(t){
+  const s=t.toLowerCase();
+  if(/surges?|jumps?|rallies?|gains?|beats?|record|high|rises?|climbs?|soars?|bullish/.test(s))return'up';
+  if(/falls?|drops?|slumps?|declines?|miss|weak|crash|bearish|cuts?|warns?|fears?|tumbles?/.test(s))return'dn';
+  return'neu';
+}
+function ago(pub){
+  try{const d=Math.floor((new Date()-new Date(pub))/60000);
+    if(d<60)return d+'分鐘前';if(d<1440)return Math.floor(d/60)+'小時前';return Math.floor(d/1440)+'天前';}
+  catch{return'';}
+}
+function cleanTitle(t){
+  return t.replace(/<!\[CDATA\[|\]\]>/g,'').replace(/ - [^-]{2,40}$/,'').trim();
+}
+
+// RSS2JSON — Google News RSS 轉 JSON，支援 CORS，免費每日 1000 次
+// 備用：feedparser.co 同樣支援 CORS
+const RSS2JSON = 'https://api.rss2json.com/v1/api.json';
+const FEEDPARSER = 'https://feedparser.co/api/feed';
+
+async function fetchNews(query){
+  const area=document.getElementById('news-area');
+  area.innerHTML=`<div class="loading"><div class="spinner"></div><div class="ltext">載入「${query||'財經頭條'}」新聞…</div></div>`;
+  document.getElementById('cnt').textContent='';
+
+  const q = query || 'stock market economy finance Wall Street';
+  const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
+
+  let articles = null;
+
+  // 方法一：rss2json.com
+  try {
+    const res = await fetch(`${RSS2JSON}?rss_url=${encodeURIComponent(rssUrl)}&count=20`, {signal:AbortSignal.timeout(8000)});
+    if(res.ok){
+      const d = await res.json();
+      if(d.status==='ok' && d.items?.length){
+        articles = d.items.map(i=>({
+          title: cleanTitle(i.title||''),
+          link: i.link||'#',
+          pub: i.pubDate||'',
+          source: (i.author||i.feed?.title||'Google News').replace(/^via\s+/i,''),
+        })).filter(a=>a.title.length>5);
+      }
+    }
+  } catch(e){ console.warn('rss2json failed:', e.message); }
+
+  // 方法二：feedparser.co 備用
+  if(!articles){
+    try {
+      const res = await fetch(`${FEEDPARSER}?url=${encodeURIComponent(rssUrl)}`, {signal:AbortSignal.timeout(8000)});
+      if(res.ok){
+        const d = await res.json();
+        const items = d.entries||d.items||[];
+        if(items.length){
+          articles = items.slice(0,20).map(i=>({
+            title: cleanTitle(i.title||''),
+            link: i.link||i.url||'#',
+            pub: i.published||i.updated||'',
+            source: i.feed_title||'Google News',
+          })).filter(a=>a.title.length>5);
+        }
+      }
+    } catch(e){ console.warn('feedparser failed:', e.message); }
+  }
+
+  if(!articles || !articles.length){
+    area.innerHTML=`<div class="err-box">
+      <div class="err-title">⚠ 暫時無法載入新聞</div>
+      <div class="err-msg">請確認網路連線正常，或稍後再試。<br>若持續發生，請嘗試更換搜尋關鍵字。</div>
+      <button class="retry" onclick="fetchNews('${query}')">重新嘗試</button>
+    </div>`;
+    return;
+  }
+
+  render(articles);
+  renderSide(articles.slice(0,6));
+  document.getElementById('cnt').textContent = articles.length+' 則';
+  document.getElementById('footer').textContent =
+    '資料來源：Google News · 更新時間：'+new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+}
+
+function render(arts){
+  const [h,...rest]=arts;
+  const stack=rest.slice(0,3), grid=rest.slice(3,9), list=rest.slice(9);
+  const tk=getTagKey, s=sent;
+
+  document.getElementById('news-area').innerHTML=`
+    <div class="hero-grid">
+      <div class="hero-main" onclick="open('${h.link}','_blank')">
+        <div class="ntag ${tk(h.title)}">${tl(tk(h.title))}</div>
+        <h2><span class="dot ${s(h.title)}"></span>${h.title}</h2>
+        <div class="hero-excerpt" style="color:var(--ink3)">點擊閱讀完整報導 → ${h.source}</div>
+        <div class="meta">${h.source} · ${ago(h.pub)}</div>
+      </div>
+      <div class="hero-stack">
+        ${stack.map(a=>`<div class="mini" onclick="open('${a.link}','_blank')">
+          <div><div class="ntag ${tk(a.title)}" style="margin-bottom:4px">${tl(tk(a.title))}</div>
+          <h3><span class="dot ${s(a.title)}"></span>${a.title}</h3></div>
+          <div class="meta">${a.source} · ${ago(a.pub)}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+    ${grid.length?`<div class="card-row">${grid.map(a=>`<div class="card" onclick="open('${a.link}','_blank')">
+      <div class="ntag ${tk(a.title)}" style="margin-bottom:6px">${tl(tk(a.title))}</div>
+      <h4><span class="dot ${s(a.title)}"></span>${a.title}</h4>
+      <div class="meta">${a.source} · ${ago(a.pub)}</div>
+    </div>`).join('')}</div>`:''}
+    ${list.length?`<div class="list-wrap">${list.map(a=>`<div class="list-row" onclick="open('${a.link}','_blank')">
+      <div><div class="ntag ${tk(a.title)}" style="margin-bottom:3px">${tl(tk(a.title))}</div>
+      <div class="list-title"><span class="dot ${s(a.title)}"></span>${a.title}</div></div>
+      <div style="text-align:right;min-width:72px"><div class="list-src">${a.source}</div><div class="list-src">${ago(a.pub)}</div></div>
+    </div>`).join('')}</div>`:''}
+  `;
+}
+
+function renderSide(arts){
+  document.getElementById('side-news').innerHTML=arts.map(a=>`
+    <div class="sni" onclick="open('${a.link}','_blank')">
+      <div class="snt"><span class="dot ${sent(a.title)}"></span>${a.title}</div>
+      <div class="snm">${a.source} · ${ago(a.pub)}</div>
+    </div>`).join('');
+}
+
+function setQ(q){ currentQ=q; document.getElementById('feed-label').textContent=q+' 新聞'; document.getElementById('q').value=q; fetchNews(q); }
+function clearQ(){ currentQ=''; document.getElementById('feed-label').textContent='今日財經頭條'; document.getElementById('q').value=''; fetchNews(''); }
+function doSearch(){ const v=document.getElementById('q').value.trim(); if(v)setQ(v); else clearQ(); }
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();});
+
+function openM(){ document.getElementById('modal').classList.add('open'); document.getElementById('mi').focus(); }
+function closeM(){ document.getElementById('modal').classList.remove('open'); document.getElementById('mi').value=''; }
+function confirmAdd(){
+  const v=document.getElementById('mi').value.trim().toUpperCase();
+  if(v&&!watchlist.includes(v)){watchlist.push(v);saveWL();renderWL();}
+  closeM(); if(v)setQ(v);
+}
+document.getElementById('mi').addEventListener('keydown',e=>{if(e.key==='Enter')confirmAdd();if(e.key==='Escape')closeM();});
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeM();});
+
+renderWL();
+fetchNews('');
+// 每10分鐘自動刷新
+setInterval(()=>fetchNews(currentQ), 10*60*1000);
+</script>
+</body>
+</html>
