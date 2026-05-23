@@ -50,16 +50,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length))
 
+        system_text = body.get("system", "")
+        user_text = body.get("user", "")
+
+        # Reinforce JSON-only output
+        strict_suffix = "\n\n重要：你的回覆必須是純 JSON，不可包含任何 markdown、代碼塊標記或說明文字。直接輸出 { 開頭的 JSON 物件。"
+        system_text = system_text + strict_suffix
+
         gemini_body = {
             "system_instruction": {
-                "parts": [{"text": body.get("system", "")}]
+                "parts": [{"text": system_text}]
             },
             "contents": [
-                {"role": "user", "parts": [{"text": body.get("user", "")}]}
+                {"role": "user", "parts": [{"text": user_text}]}
             ],
             "generationConfig": {
-                "temperature": 0.7,
+                "temperature": 0.4,
                 "maxOutputTokens": 4000,
+                "responseMimeType": "application/json",
             }
         }
 

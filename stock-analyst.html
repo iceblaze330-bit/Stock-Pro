@@ -477,17 +477,38 @@ async function runTab(sym, tabId) {
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     const raw = data.text || '';
-    const clean = raw.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean);
+    const parsed = extractJSON(raw);
     if (!cache[sym]) cache[sym]={};
     cache[sym][tabId] = parsed;
     showResult(parsed, tabId);
   } catch(e) {
     hideLoading();
-    showError('分析失敗：' + e.message);
+    showError('分析失敗：' + e.message + '，請再試一次');
     idleState.style.display = currentSym ? 'none' : 'block';
     resultPanel.style.display = 'none';
   }
+}
+
+// Robust JSON extractor — handles markdown fences, extra text, trailing commas
+function extractJSON(raw) {
+  // 1. Strip markdown code fences
+  let s = raw.replace(/```json|```/gi, '').trim();
+
+  // 2. Try direct parse first
+  try { return JSON.parse(s); } catch(_) {}
+
+  // 3. Extract first {...} block
+  const start = s.indexOf('{');
+  const end   = s.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    let block = s.slice(start, end + 1);
+    // Remove trailing commas before } or ]
+    block = block.replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(block); } catch(_) {}
+  }
+
+  // 4. Nothing worked
+  throw new Error('無法解析 AI 回應，請再試一次');
 }
 
 function makeTVWidget(containerId, scriptSrc, options) {
