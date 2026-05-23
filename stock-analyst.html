@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wall Street Equity Analyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#080c10;color:white;font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-bottom:80px}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 10%,rgba(0,40,25,.7) 0%,transparent 55%),radial-gradient(ellipse at 85% 90%,rgba(0,15,50,.7) 0%,transparent 55%);pointer-events:none;z-index:0}
+#app{position:relative;z-index:1}
+
+/* HEADER */
+#header{padding:20px 36px;border-bottom:1px solid rgba(0,255,136,.1);background:rgba(0,0,0,.4);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+#header-left .sub{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.22em;color:#00ff88;margin-bottom:3px}
+#header-left .title{font-family:'Space Mono',monospace;font-size:1.25rem;font-weight:700;color:#fff}
+#ticker-badge{display:none;background:linear-gradient(135deg,#00ff88,#00ccff);color:#080c10;font-family:'Space Mono',monospace;font-weight:700;font-size:.95rem;padding:5px 16px;border-radius:4px;letter-spacing:.08em;box-shadow:0 0 20px rgba(0,255,136,.3)}
+
+/* SEARCH BAR */
+#search-wrap{max-width:720px;margin:44px auto 0;padding:0 24px}
+#search-hint{font-size:.65rem;letter-spacing:.14em;color:rgba(255,255,255,.3);margin-bottom:20px;text-transform:uppercase}
+#search-row{display:flex;gap:10px}
+#ticker-input{flex:1;padding:14px 18px;background:rgba(255,255,255,.04);border:1px solid rgba(0,255,136,.2);border-radius:8px;color:white;font-family:'Space Mono',monospace;font-size:1rem;font-weight:700;letter-spacing:.07em;outline:none;transition:border-color .2s,box-shadow .2s}
+#ticker-input::placeholder{color:rgba(255,255,255,.2)}
+#ticker-input:focus{border-color:rgba(0,255,136,.55);box-shadow:0 0 0 3px rgba(0,255,136,.08)}
+#ticker-input:disabled{opacity:.5;cursor:not-allowed}
+#go-btn{padding:14px 28px;background:linear-gradient(135deg,#00ff88,#00d4ff);border:none;border-radius:8px;color:#080c10;font-family:'Space Mono',monospace;font-weight:700;font-size:.82rem;letter-spacing:.07em;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:8px;transition:opacity .2s}
+#go-btn:disabled{background:rgba(255,255,255,.07);color:rgba(255,255,255,.3);cursor:not-allowed}
+#error-box{display:none;margin-top:12px;padding:11px 15px;background:rgba(255,60,60,.07);border:1px solid rgba(255,60,60,.2);border-radius:6px;color:#ff7070;font-size:.8rem;line-height:1.6}
+
+/* TABS */
+#tabs-wrap{max-width:1100px;margin:36px auto 0;padding:0 24px}
+#tabs-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+#tabs-scroll::-webkit-scrollbar{display:none}
+.tab-btn{flex-shrink:0;padding:9px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;color:rgba(255,255,255,.45);font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.06em;cursor:pointer;white-space:nowrap;transition:all .2s;display:flex;align-items:center;gap:7px}
+.tab-btn:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.7)}
+.tab-btn.active{background:rgba(0,255,136,.1);border-color:rgba(0,255,136,.4);color:#00ff88}
+.tab-btn .ticon{font-size:.9rem}
+
+/* CONTENT PANEL */
+#panel-wrap{max-width:1100px;margin:28px auto 0;padding:0 24px}
+
+/* Idle */
+#idle-state{text-align:center;padding:100px 0;opacity:.25}
+#idle-state .big{font-size:3rem;margin-bottom:16px}
+#idle-state .msg{font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase}
+
+/* Loading */
+#loading-state{display:none;text-align:center;padding:80px 0}
+.spinner-wrap{display:inline-flex;flex-direction:column;align-items:center;gap:20px}
+.big-spinner{width:44px;height:44px;border:3px solid rgba(0,255,136,.2);border-top-color:#00ff88;border-radius:50%;animation:spin .9s linear infinite}
+.loading-label{font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.14em;color:#00ff88;text-transform:uppercase}
+
+/* Cards */
+.section-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:24px 28px;margin-bottom:14px;position:relative;overflow:hidden;opacity:0;transform:translateY(18px);transition:opacity .45s ease,transform .45s ease}
+.section-card.visible{opacity:1;transform:translateY(0)}
+.section-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,#00ff88,#00ccff);border-radius:3px 0 0 3px}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.card-icon{font-size:1.15rem}
+.card-label{font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.12em;color:#00ff88;text-transform:uppercase;font-weight:700}
+.card-body{font-size:.93rem;line-height:1.9;color:rgba(255,255,255,.8);white-space:pre-wrap}
+
+/* Score badge (moat) */
+.score-badge{display:inline-block;background:linear-gradient(135deg,#00ff88,#00ccff);color:#080c10;font-family:'Space Mono',monospace;font-weight:700;font-size:1.1rem;padding:6px 18px;border-radius:6px;margin-bottom:18px;letter-spacing:.05em}
+
+/* Debate cards */
+.debate-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px}
+@media(max-width:620px){.debate-wrap{grid-template-columns:1fr}}
+.bull-card{background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:22px 24px}
+.bear-card{background:rgba(255,80,80,.05);border:1px solid rgba(255,80,80,.2);border-radius:12px;padding:22px 24px}
+.debate-label{font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.12em;font-weight:700;margin-bottom:12px}
+.bull-label{color:#00ff88}
+.bear-label{color:#ff6060}
+.debate-body{font-size:.9rem;line-height:1.85;color:rgba(255,255,255,.78);white-space:pre-wrap}
+.conclusion-card{background:rgba(255,200,0,.04);border:1px solid rgba(255,200,0,.15);border-radius:12px;padding:22px 24px;margin-bottom:14px}
+.conclusion-label{font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.12em;color:#ffd700;font-weight:700;margin-bottom:12px}
+.conclusion-body{font-size:.92rem;line-height:1.85;color:rgba(255,255,255,.78);white-space:pre-wrap}
+
+/* Verdict badge */
+.verdict-wrap{text-align:center;padding:28px 0 16px}
+.verdict-badge{display:inline-block;font-family:'Space Mono',monospace;font-weight:700;font-size:1.4rem;letter-spacing:.08em;padding:12px 36px;border-radius:10px}
+.verdict-buy{background:rgba(0,255,136,.15);border:2px solid #00ff88;color:#00ff88}
+.verdict-hold{background:rgba(255,200,0,.12);border:2px solid #ffd700;color:#ffd700}
+.verdict-avoid{background:rgba(255,60,60,.12);border:2px solid #ff6060;color:#ff6060}
+
+.disclaimer{margin-top:6px;padding:13px 17px;background:rgba(255,200,0,.03);border:1px solid rgba(255,200,0,.1);border-radius:8px;font-size:.68rem;color:rgba(255,255,255,.28);line-height:1.7}
+
+/* Inline spinner for button */
+.btn-spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,255,136,.3);border-top-color:#00ff88;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+/* TradingView */
+.tv-section{margin-bottom:24px}
+.tv-label{font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.14em;color:#00ff88;text-transform:uppercase;margin-bottom:12px;padding-left:4px}
+.tv-widget-wrap{border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <div id="header-left">
+      <div class="sub">WALL STREET</div>
+      <div class="title">EQUITY ANALYST</div>
+    </div>
+    <span id="ticker-badge"></span>
+  </div>
+
+  <!-- Search -->
+  <div id="search-wrap">
+    <p id="search-hint">輸入股票代碼，選擇分析模式</p>
+    <div id="search-row">
+      <input id="ticker-input" type="text" placeholder="AAPL · TSLA · NVDA · 2330.TW" autocomplete="off" spellcheck="false"/>
+      <button id="go-btn">分析 →</button>
+    </div>
+    <div id="error-box"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabs-wrap">
+    <div id="tabs-scroll">
+      <button class="tab-btn active" data-tab="0"><span class="ticon">📋</span>綜合分析</button>
+      <button class="tab-btn" data-tab="1"><span class="ticon">📊</span>五年財務</button>
+      <button class="tab-btn" data-tab="2"><span class="ticon">🏰</span>護城河評分</button>
+      <button class="tab-btn" data-tab="3"><span class="ticon">💎</span>估值分析</button>
+      <button class="tab-btn" data-tab="4"><span class="ticon">🚀</span>成長潛力</button>
+      <button class="tab-btn" data-tab="5"><span class="ticon">⚔️</span>多空辯論</button>
+      <button class="tab-btn" data-tab="6"><span class="ticon">✅</span>投資結論</button>
+      <button class="tab-btn" data-tab="7"><span class="ticon">📈</span>TradingView</button>
+    </div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel-wrap">
+    <div id="idle-state">
+      <div class="big">📊</div>
+      <div class="msg">輸入股票代碼，按分析開始</div>
+    </div>
+    <div id="loading-state">
+      <div class="spinner-wrap">
+        <div class="big-spinner"></div>
+        <div class="loading-label" id="loading-label">AI 分析中…</div>
+      </div>
+    </div>
+    <div id="result-panel" style="display:none"></div>
+  </div>
+
+</div>
+<script>
+// ── Tab definitions ──────────────────────────────────────────────
+const TABS = [
+  {
+    id: 0, key: 'overview', label: '綜合分析',
+    loadingMsg: '進行綜合分析…',
+    system: `你是一位擁有 20 年經驗的華爾街資深股票分析師。
+只輸出合法 JSON，key 為：business, moat, industry, financials, risks, valuation, scenarios, outlook。
+每個 value 為繁體中文（200-300字）。禁止 Markdown，不加前言後語。`,
+    prompt: sym => `分析股票：${sym}
+1. business：商業模式與收入來源
+2. moat：競爭優勢與護城河
+3. industry：產業趨勢與機會
+4. financials：財務健康
+5. risks：關鍵風險（3-5項）
+6. valuation：與競爭對手估值比較
+7. scenarios：多空與基本情境（含目標股價）
+8. outlook：未來12-24個月展望
+只輸出JSON。`,
+    render: renderOverview
+  },
+  {
+    id: 1, key: 'financials5y', label: '五年財務',
+    loadingMsg: '拆解五年財務數據…',
+    system: `你是頂尖財務分析師。
+只輸出合法 JSON，key 為：revenue, netIncome, fcf, margins, debt, roe, verdict。
+每個 value 為繁體中文分析（150-250字）。verdict 為「財務體質變強」或「開始走弱」加上理由。禁止 Markdown。`,
+    prompt: sym => `分析 ${sym} 過去5年財務數據：
+1. revenue：營收成長趨勢
+2. netIncome：淨利趨勢
+3. fcf：自由現金流
+4. margins：利潤率變化
+5. debt：負債水準
+6. roe：股東權益報酬率ROE
+7. verdict：整體財務體質判斷（變強 or 走弱）
+只輸出JSON。`,
+    render: renderFinancials
+  },
+  {
+    id: 2, key: 'moat', label: '護城河評分',
+    loadingMsg: '評估競爭護城河…',
+    system: `你是競爭策略專家。
+只輸出合法 JSON，key 為：brand, network, switching, cost, patent, vsCompetitors, score, summary。
+score 為 1-10 的數字。每個文字 value 繁體中文（150-200字）。禁止 Markdown。`,
+    prompt: sym => `評估 ${sym} 的競爭護城河：
+1. brand：品牌影響力
+2. network：網路效應
+3. switching：轉換成本
+4. cost：成本優勢
+5. patent：專利或獨家技術
+6. vsCompetitors：與主要競爭對手比較
+7. score：護城河強度評分（1-10，只輸出數字）
+8. summary：總結
+只輸出JSON。`,
+    render: renderMoat
+  },
+  {
+    id: 3, key: 'valuation', label: '估值分析',
+    loadingMsg: '計算估值模型…',
+    system: `你是投資銀行估值專家。
+只輸出合法 JSON，key 為：pe, dcf, industryAvg, conclusion。
+每個 value 繁體中文（200-250字）。禁止 Markdown。`,
+    prompt: sym => `對 ${sym} 進行估值分析：
+1. pe：本益比(P/E)與同業比較
+2. dcf：折現現金流(DCF)估值
+3. industryAvg：產業平均估值水準
+4. conclusion：被低估或高估的結論
+只輸出JSON。`,
+    render: renderValuation
+  },
+  {
+    id: 4, key: 'growth', label: '成長潛力',
+    loadingMsg: '評估成長潛力…',
+    system: `你是成長型投資分析師。
+只輸出合法 JSON，key 為：marketSize, industryGrowth, expansion, newProducts, techAdvantage, outlook5to10y。
+每個 value 繁體中文（180-250字）。禁止 Markdown。`,
+    prompt: sym => `分析 ${sym} 未來成長潛力：
+1. marketSize：市場規模
+2. industryGrowth：產業成長率
+3. expansion：擴張機會
+4. newProducts：新產品線
+5. techAdvantage：AI或技術優勢
+6. outlook5to10y：未來5-10年成長空間
+只輸出JSON。`,
+    render: renderGrowth
+  },
+  {
+    id: 5, key: 'debate', label: '多空辯論',
+    loadingMsg: '進行多空辯論…',
+    system: `你是兩位資深分析師。
+只輸出合法 JSON，key 為：bullName, bullArgs, bearName, bearArgs, conclusion。
+bullArgs 和 bearArgs 各為繁體中文（250-350字，需有數據支持）。conclusion 中性結論（150字）。禁止 Markdown。`,
+    prompt: sym => `針對 ${sym} 進行多空辯論：
+bullName：多頭分析師名字（虛構英文名）
+bullArgs：多頭論點（看漲，含數據）
+bearName：空頭分析師名字（虛構英文名）
+bearArgs：空頭論點（看跌，含數據）
+conclusion：中性結論
+只輸出JSON。`,
+    render: renderDebate
+  },
+  {
+    id: 6, key: 'verdict', label: '投資結論',
+    loadingMsg: '生成投資結論…',
+    system: `你是首席投資策略師。
+只輸出合法 JSON，key 為：shortTerm, longTerm, catalysts, risks, verdict。
+verdict 只能是以下三個值之一：買入、持有、避免。
+其餘 value 繁體中文（180-250字）。禁止 Markdown。`,
+    prompt: sym => `評估是否應投資 ${sym}：
+1. shortTerm：短期展望（1年內）
+2. longTerm：長期展望（5年以上）
+3. catalysts：關鍵催化因素
+4. risks：主要風險
+5. verdict：最終結論（只能是：買入、持有、避免）
+只輸出JSON。`,
+    render: renderVerdict
+  },
+];
+
+// ── Render functions ──────────────────────────────────────────────
+function card(icon, label, body, delay=0) {
+  return `<div class="section-card" style="transition-delay:${delay}s">
+    <div class="card-head"><span class="card-icon">${icon}</span><span class="card-label">${label}</span></div>
+    <div class="card-body">${esc(body)}</div>
+  </div>`;
+}
+
+function renderOverview(d) {
+  const items = [
+    ['🏢','商業模式與收入來源',d.business],
+    ['🏰','競爭優勢（護城河）',d.moat],
+    ['📈','產業趨勢',d.industry],
+    ['💰','財務健康狀況',d.financials],
+    ['⚠️','關鍵風險',d.risks],
+    ['⚖️','估值比較',d.valuation],
+    ['🎯','多頭・空頭・基本情境',d.scenarios],
+    ['🔭','未來 12–24 個月展望',d.outlook],
+  ];
+  return items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
+}
+
+function renderFinancials(d) {
+  const items = [
+    ['📈','營收成長',d.revenue],
+    ['💵','淨利趨勢',d.netIncome],
+    ['💧','自由現金流',d.fcf],
+    ['📐','利潤率',d.margins],
+    ['🏦','負債水準',d.debt],
+    ['🔄','股東權益報酬率（ROE）',d.roe],
+  ];
+  const verdictColor = (d.verdict||'').includes('強') ? '#00ff88' : '#ff6060';
+  const verdictHtml = `<div class="section-card visible" style="border-color:${verdictColor}33;margin-bottom:14px">
+    <div class="card-head"><span class="card-icon">🩺</span><span class="card-label" style="color:${verdictColor}">財務體質判斷</span></div>
+    <div class="card-body">${esc(d.verdict||'—')}</div>
+  </div>`;
+  return verdictHtml + items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
+}
+
+function renderMoat(d) {
+  const score = parseInt(d.score)||0;
+  const scoreColor = score>=7?'#00ff88':score>=4?'#ffd700':'#ff6060';
+  const scoreBadge = `<div style="text-align:center;padding:20px 0 8px">
+    <div style="font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.15em;color:rgba(255,255,255,.4);margin-bottom:10px;text-transform:uppercase">護城河強度</div>
+    <div class="score-badge" style="background:${scoreColor};color:#080c10">${score} / 10</div>
+  </div>`;
+  const items = [
+    ['🎯','品牌影響力',d.brand],
+    ['🕸️','網路效應',d.network],
+    ['🔒','轉換成本',d.switching],
+    ['💡','成本優勢',d.cost],
+    ['🔬','專利或獨家技術',d.patent],
+    ['⚔️','與競爭對手比較',d.vsCompetitors],
+    ['📝','總結',d.summary],
+  ];
+  return scoreBadge + items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
+}
+
+function renderValuation(d) {
+  const items = [
+    ['📊','本益比（P/E）與同業比較',d.pe],
+    ['🔢','折現現金流（DCF）估值',d.dcf],
+    ['🏭','產業平均估值水準',d.industryAvg],
+    ['⚖️','低估 / 高估結論',d.conclusion],
+  ];
+  return items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.1)).join('') + disclaimer();
+}
+
+function renderGrowth(d) {
+  const items = [
+    ['🌍','市場規模',d.marketSize],
+    ['📈','產業成長率',d.industryGrowth],
+    ['🚀','擴張機會',d.expansion],
+    ['🧪','新產品線',d.newProducts],
+    ['🤖','AI 或技術優勢',d.techAdvantage],
+    ['🔭','未來 5–10 年成長空間',d.outlook5to10y],
+  ];
+  return items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.07)).join('') + disclaimer();
+}
+
+function renderDebate(d) {
+  const debateHtml = `<div class="debate-wrap section-card visible" style="padding:0;border:none;background:none">
+    <div class="bull-card">
+      <div class="debate-label bull-label">📈 ${esc(d.bullName||'多頭分析師')} — 看漲</div>
+      <div class="debate-body">${esc(d.bullArgs||'—')}</div>
+    </div>
+    <div class="bear-card">
+      <div class="debate-label bear-label">📉 ${esc(d.bearName||'空頭分析師')} — 看跌</div>
+      <div class="debate-body">${esc(d.bearArgs||'—')}</div>
+    </div>
+  </div>
+  <div class="conclusion-card section-card visible">
+    <div class="conclusion-label">⚖️ 中性結論</div>
+    <div class="conclusion-body">${esc(d.conclusion||'—')}</div>
+  </div>`;
+  return debateHtml + disclaimer();
+}
+
+function renderVerdict(d) {
+  const v = d.verdict||'持有';
+  const cls = v==='買入'?'verdict-buy':v==='避免'?'verdict-avoid':'verdict-hold';
+  const verdictHtml = `<div class="verdict-wrap">
+    <div style="font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.16em;color:rgba(255,255,255,.35);margin-bottom:14px;text-transform:uppercase">最終投資結論</div>
+    <div class="verdict-badge ${cls}">${v}</div>
+  </div>`;
+  const items = [
+    ['📅','短期展望（1年內）',d.shortTerm],
+    ['🌱','長期展望（5年以上）',d.longTerm],
+    ['⚡','關鍵催化因素',d.catalysts],
+    ['⚠️','主要風險',d.risks],
+  ];
+  return verdictHtml + items.map(([icon,label,body],i)=>card(icon,label,body||'—',i*0.08)).join('') + disclaimer();
+}
+
+function disclaimer() {
+  return `<div class="disclaimer">⚠️ 免責聲明：本分析由 AI 生成，僅供參考，不構成投資建議。投資有風險，請自行判斷並諮詢專業財務顧問。</div>`;
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── State ─────────────────────────────────────────────────────────
+let activeTab = 0;
+let currentSym = '';
+const cache = {}; // cache[sym][tabId] = parsed data
+
+// ── DOM refs ──────────────────────────────────────────────────────
+const tickerInput = document.getElementById('ticker-input');
+const goBtn       = document.getElementById('go-btn');
+const errBox      = document.getElementById('error-box');
+const badge       = document.getElementById('ticker-badge');
+const idleState   = document.getElementById('idle-state');
+const loadingState= document.getElementById('loading-state');
+const loadingLabel= document.getElementById('loading-label');
+const resultPanel = document.getElementById('result-panel');
+const tabBtns     = document.querySelectorAll('.tab-btn');
+
+// ── Tab switching ─────────────────────────────────────────────────
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tabId = parseInt(btn.dataset.tab);
+    activeTab = tabId;
+    tabBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.tab)===tabId));
+    if (currentSym) runTab(currentSym, tabId);
+  });
+});
+
+// ── Search ────────────────────────────────────────────────────────
+tickerInput.addEventListener('keydown', e => { if(e.key==='Enter') doAnalyze(); });
+goBtn.addEventListener('click', doAnalyze);
+
+function doAnalyze() {
+  const sym = tickerInput.value.trim().toUpperCase();
+  if (!sym) return;
+  currentSym = sym;
+  // clear cache for new symbol
+  if (!cache[sym]) cache[sym] = {};
+  badge.textContent = sym;
+  badge.style.display = 'inline-block';
+  clearError();
+  runTab(sym, activeTab);
+}
+
+async function runTab(sym, tabId) {
+  // TradingView tab — no API call needed
+  if (tabId === 7) {
+    showTradingView(sym);
+    return;
+  }
+  // Use cache if available
+  if (cache[sym] && cache[sym][tabId]) {
+    showResult(cache[sym][tabId], tabId);
+    return;
+  }
+  const tab = TABS[tabId];
+  showLoading(tab.loadingMsg);
+
+  try {
+    const resp = await fetch('/api', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ system: tab.system, user: tab.prompt(sym) }),
+    });
+    if (!resp.ok) { const t=await resp.text(); throw new Error(`API 錯誤 ${resp.status}: ${t}`); }
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    const raw = data.text || '';
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    if (!cache[sym]) cache[sym]={};
+    cache[sym][tabId] = parsed;
+    showResult(parsed, tabId);
+  } catch(e) {
+    hideLoading();
+    showError('分析失敗：' + e.message);
+    idleState.style.display = currentSym ? 'none' : 'block';
+    resultPanel.style.display = 'none';
+  }
+}
+
+function makeTVWidget(containerId, scriptSrc, options) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tradingview-widget-container';
+  wrap.style.height = '100%';
+  wrap.style.width = '100%';
+
+  const inner = document.createElement('div');
+  inner.className = 'tradingview-widget-container__widget';
+  inner.style.height = 'calc(100% - 32px)';
+  inner.style.width = '100%';
+
+  const script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src = scriptSrc;
+  script.async = true;
+  script.innerHTML = JSON.stringify(options);
+
+  wrap.appendChild(inner);
+  wrap.appendChild(script);
+  container.appendChild(wrap);
+}
+
+function showTradingView(sym) {
+  hideLoading();
+  idleState.style.display = 'none';
+  clearError();
+
+  resultPanel.innerHTML = `
+    <div class="tv-section">
+      <div class="tv-label">📊 K線圖表</div>
+      <div class="tv-widget-wrap" style="height:500px">
+        <div id="tv-chart" style="height:100%;width:100%"></div>
+      </div>
+    </div>
+    <div class="tv-section">
+      <div class="tv-label">💰 財務數據</div>
+      <div class="tv-widget-wrap" style="height:550px">
+        <div id="tv-financials" style="height:100%;width:100%"></div>
+      </div>
+    </div>
+    <div class="tv-section">
+      <div class="tv-label">🎯 技術分析</div>
+      <div class="tv-widget-wrap" style="height:450px">
+        <div id="tv-technical" style="height:100%;width:100%"></div>
+      </div>
+    </div>
+    <div class="disclaimer">⚠️ 圖表資料由 TradingView 提供，僅供參考，不構成投資建議。</div>
+  `;
+  resultPanel.style.display = 'block';
+
+  // K線圖表
+  makeTVWidget('tv-chart',
+    'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js',
+    {
+      autosize: true,
+      symbol: sym,
+      interval: 'D',
+      timezone: 'Asia/Taipei',
+      theme: 'dark',
+      style: '1',
+      locale: 'zh_TW',
+      allow_symbol_change: false,
+      calendar: false,
+      support_host: 'https://www.tradingview.com',
+    }
+  );
+
+  // 財務數據
+  makeTVWidget('tv-financials',
+    'https://s3.tradingview.com/external-embedding/embed-widget-financials.js',
+    {
+      colorTheme: 'dark',
+      isTransparent: true,
+      largeChartUrl: '',
+      displayMode: 'adaptive',
+      width: '100%',
+      height: '100%',
+      symbol: sym,
+      locale: 'zh_TW',
+    }
+  );
+
+  // 技術分析
+  makeTVWidget('tv-technical',
+    'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js',
+    {
+      interval: '1D',
+      width: '100%',
+      height: '100%',
+      isTransparent: true,
+      symbol: sym,
+      showIntervalTabs: true,
+      displayMode: 'single',
+      colorTheme: 'dark',
+      locale: 'zh_TW',
+    }
+  );
+}
+
+function showLoading(msg) {
+  loadingLabel.textContent = msg;
+  idleState.style.display = 'none';
+  resultPanel.style.display = 'none';
+  loadingState.style.display = 'block';
+  goBtn.disabled = true;
+  tickerInput.disabled = true;
+  goBtn.innerHTML = '<span class="btn-spinner"></span> 分析中';
+}
+
+function hideLoading() {
+  loadingState.style.display = 'none';
+  goBtn.disabled = false;
+  tickerInput.disabled = false;
+  goBtn.innerHTML = '分析 →';
+}
+
+function showResult(data, tabId) {
+  hideLoading();
+  const html = TABS[tabId].render(data);
+  resultPanel.innerHTML = html;
+  resultPanel.style.display = 'block';
+  setTimeout(() => {
+    resultPanel.querySelectorAll('.section-card').forEach(el => el.classList.add('visible'));
+  }, 60);
+}
+
+function showError(msg) { errBox.textContent=msg; errBox.style.display='block'; }
+function clearError()    { errBox.textContent='';  errBox.style.display='none';  }
+</script>
+</body>
+</html>
