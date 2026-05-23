@@ -54,7 +54,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         user_text = body.get("user", "")
 
         # Reinforce JSON-only output
-        strict_suffix = "\n\n重要：你的回覆必須是純 JSON，不可包含任何 markdown、代碼塊標記或說明文字。直接輸出 { 開頭的 JSON 物件。"
+        strict_suffix = "\n\n重要：你的回覆必須是純 JSON 物件，所有 value 都必須是純文字字串（string），不可以是物件、陣列或巢狀結構。不可包含任何 markdown、代碼塊標記或說明文字。直接輸出 { 開頭的 JSON 物件。"
         system_text = system_text + strict_suffix
 
         gemini_body = {
