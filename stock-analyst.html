@@ -40,6 +40,11 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 #ticker-input:disabled{opacity:.5;cursor:not-allowed}
 #go-btn{padding:14px 28px;background:linear-gradient(135deg,#00ff88,#00d4ff);border:none;border-radius:8px;color:#080c10;font-family:'Space Mono',monospace;font-weight:700;font-size:.82rem;letter-spacing:.07em;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:8px;transition:opacity .2s}
 #go-btn:disabled{background:rgba(255,255,255,.07);color:rgba(255,255,255,.3);cursor:not-allowed}
+#refresh-btn{display:none;padding:14px 18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.7);font-family:'Space Mono',monospace;font-weight:700;font-size:.78rem;letter-spacing:.05em;cursor:pointer;white-space:nowrap;transition:all .2s}
+#refresh-btn:hover{border-color:rgba(0,255,136,.45);color:#00ff88;background:rgba(0,255,136,.06)}
+#refresh-btn:disabled{opacity:.4;cursor:not-allowed}
+.cache-note{margin-bottom:12px;padding:9px 12px;border:1px solid rgba(0,255,136,.12);border-radius:8px;background:rgba(0,255,136,.04);font-size:.68rem;line-height:1.6;color:rgba(255,255,255,.42);font-family:'Space Mono',monospace}
+.cache-note strong{color:#00ff88;font-weight:700}
 #error-box{display:none;margin-top:12px;padding:11px 15px;background:rgba(255,60,60,.07);border:1px solid rgba(255,60,60,.2);border-radius:6px;color:#ff7070;font-size:.8rem;line-height:1.6}
 
 /* TABS */
@@ -79,7 +84,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 /* Debate cards */
 .debate-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px}
-@media(max-width:620px){.debate-wrap{grid-template-columns:1fr}}
+@media(max-width:620px){.debate-wrap{grid-template-columns:1fr}#search-row{flex-wrap:wrap}#go-btn,#refresh-btn{flex:1;justify-content:center;min-width:135px}}
 .bull-card{background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:22px 24px}
 .bear-card{background:rgba(255,80,80,.05);border:1px solid rgba(255,80,80,.2);border-radius:12px;padding:22px 24px}
 .debate-label{font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.12em;font-weight:700;margin-bottom:12px}
@@ -138,6 +143,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
     <div id="search-row">
       <input id="ticker-input" type="text" placeholder="AAPL · TSLA · NVDA · 2330.TW" autocomplete="off" spellcheck="false"/>
       <button id="go-btn">分析 →</button>
+      <button id="refresh-btn" title="忽略快取，重新呼叫 AI 分析">重新分析</button>
     </div>
     <div id="error-box"></div>
   </div>
@@ -414,11 +420,14 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 // ── State ─────────────────────────────────────────────────────────
 let activeTab = 0;
 let currentSym = '';
-const cache = {}; // cache[sym][tabId] = parsed data
+const cache = {}; // memory cache: cache[sym][tabId] = { data, savedAt }
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours; change this if you want shorter/longer cache
+const CACHE_PREFIX = 'stock_ai_cache_v2:';
 
 // ── DOM refs ──────────────────────────────────────────────────────
 const tickerInput = document.getElementById('ticker-input');
 const goBtn       = document.getElementById('go-btn');
+const refreshBtn  = document.getElementById('refresh-btn');
 const errBox      = document.getElementById('error-box');
 const badge       = document.getElementById('ticker-badge');
 const idleState   = document.getElementById('idle-state');
@@ -426,6 +435,74 @@ const loadingState= document.getElementById('loading-state');
 const loadingLabel= document.getElementById('loading-label');
 const resultPanel = document.getElementById('result-panel');
 const tabBtns     = document.querySelectorAll('.tab-btn');
+
+
+function cacheKey(sym, tabId) {
+  return CACHE_PREFIX + sym + ':' + tabId;
+}
+
+function formatCacheTime(ts) {
+  try {
+    return new Date(ts).toLocaleString('zh-TW', {
+      month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'
+    });
+  } catch(_) { return ''; }
+}
+
+function getCachedResult(sym, tabId) {
+  const now = Date.now();
+  if (cache[sym] && cache[sym][tabId]) {
+    const item = cache[sym][tabId];
+    if (item && item.data && now - item.savedAt < CACHE_TTL_MS) return item;
+  }
+
+  try {
+    const raw = localStorage.getItem(cacheKey(sym, tabId));
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (!item || !item.data || !item.savedAt) return null;
+    if (now - item.savedAt > CACHE_TTL_MS) {
+      localStorage.removeItem(cacheKey(sym, tabId));
+      return null;
+    }
+    if (!cache[sym]) cache[sym] = {};
+    cache[sym][tabId] = item;
+    return item;
+  } catch(_) {
+    return null;
+  }
+}
+
+function saveCachedResult(sym, tabId, data) {
+  const item = { data, savedAt: Date.now() };
+  if (!cache[sym]) cache[sym] = {};
+  cache[sym][tabId] = item;
+  try {
+    localStorage.setItem(cacheKey(sym, tabId), JSON.stringify(item));
+  } catch(_) {
+    // If browser storage is full or disabled, memory cache still works for this session.
+  }
+  return item;
+}
+
+function clearCachedResult(sym, tabId) {
+  if (cache[sym]) delete cache[sym][tabId];
+  try { localStorage.removeItem(cacheKey(sym, tabId)); } catch(_) {}
+}
+
+function pruneExpiredCache() {
+  try {
+    const now = Date.now();
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(CACHE_PREFIX)) continue;
+      const item = JSON.parse(localStorage.getItem(k) || '{}');
+      if (!item.savedAt || now - item.savedAt > CACHE_TTL_MS) localStorage.removeItem(k);
+    }
+  } catch(_) {}
+}
+
+pruneExpiredCache();
 
 // ── Tab switching ─────────────────────────────────────────────────
 tabBtns.forEach(btn => {
@@ -440,6 +517,13 @@ tabBtns.forEach(btn => {
 // ── Search ────────────────────────────────────────────────────────
 tickerInput.addEventListener('keydown', e => { if(e.key==='Enter') doAnalyze(); });
 goBtn.addEventListener('click', doAnalyze);
+refreshBtn.addEventListener('click', () => {
+  const sym = (currentSym || tickerInput.value).trim().toUpperCase();
+  if (!sym) return;
+  currentSym = sym;
+  clearCachedResult(sym, activeTab);
+  runTab(sym, activeTab, { force: true });
+});
 
 function doAnalyze() {
   const sym = tickerInput.value.trim().toUpperCase();
@@ -449,20 +533,24 @@ function doAnalyze() {
   if (!cache[sym]) cache[sym] = {};
   badge.textContent = sym;
   badge.style.display = 'inline-block';
+  refreshBtn.style.display = 'inline-flex';
   clearError();
   runTab(sym, activeTab);
 }
 
-async function runTab(sym, tabId) {
+async function runTab(sym, tabId, options = {}) {
   // TradingView tab — no API call needed
   if (tabId === 7) {
     showTradingView(sym);
     return;
   }
-  // Use cache if available
-  if (cache[sym] && cache[sym][tabId]) {
-    showResult(cache[sym][tabId], tabId);
-    return;
+  // Use short-term local cache if available
+  if (!options.force) {
+    const cached = getCachedResult(sym, tabId);
+    if (cached) {
+      showResult(cached.data, tabId, { cached: true, savedAt: cached.savedAt });
+      return;
+    }
   }
   const tab = TABS[tabId];
   showLoading(tab.loadingMsg);
@@ -481,9 +569,8 @@ async function runTab(sym, tabId) {
     if (data.error) throw new Error(data.error);
     const raw = data.text || '';
     const parsed = extractJSON(raw);
-    if (!cache[sym]) cache[sym]={};
-    cache[sym][tabId] = parsed;
-    showResult(parsed, tabId);
+    const saved = saveCachedResult(sym, tabId, parsed);
+    showResult(parsed, tabId, { cached: false, savedAt: saved.savedAt });
   } catch(e) {
     hideLoading();
     showError('分析失敗：' + e.message + '，請再試一次');
@@ -640,6 +727,7 @@ function showLoading(msg) {
   resultPanel.style.display = 'none';
   loadingState.style.display = 'block';
   goBtn.disabled = true;
+  refreshBtn.disabled = true;
   tickerInput.disabled = true;
   goBtn.innerHTML = '<span class="btn-spinner"></span> 分析中';
 }
@@ -647,14 +735,17 @@ function showLoading(msg) {
 function hideLoading() {
   loadingState.style.display = 'none';
   goBtn.disabled = false;
+  refreshBtn.disabled = false;
   tickerInput.disabled = false;
   goBtn.innerHTML = '分析 →';
 }
 
-function showResult(data, tabId) {
+function showResult(data, tabId, meta = {}) {
   hideLoading();
+  refreshBtn.style.display = currentSym ? 'inline-flex' : 'none';
   const html = TABS[tabId].render(data);
-  resultPanel.innerHTML = html;
+  const note = meta.savedAt ? `<div class="cache-note"><strong>${meta.cached ? '使用快取' : '新分析已記錄'}</strong>　${currentSym} / ${TABS[tabId].label}　記錄時間：${formatCacheTime(meta.savedAt)}　｜　6 小時內再查同樣項目不會重新呼叫 AI。需要最新答案請按「重新分析」。</div>` : '';
+  resultPanel.innerHTML = note + html;
   resultPanel.style.display = 'block';
   setTimeout(() => {
     resultPanel.querySelectorAll('.section-card').forEach(el => el.classList.add('visible'));
