@@ -1,4 +1,12 @@
-# Render deployment
+# Stock Analyst Render App
+
+## Deploy on Render
+
+Build command: leave blank or use:
+
+```bash
+pip install -r requirements.txt
+```
 
 Start command:
 
@@ -6,28 +14,34 @@ Start command:
 python server.py
 ```
 
-Environment variables on Render:
+## Required Environment Variables
 
-- `GEMINI_API_KEY` = your Google Gemini API key
-- `APP_PASSWORD` = login password for the web app
-- Optional: `APP_SECRET` = any random secret string. If omitted, the app still works.
+Set these in Render → your Web Service → Environment:
 
-Main page:
-
-- `/` or `/stock-analyst.html` = AI stock analyst
-- `/index.html` = MarketPulse news page
-- `/us_stock_analyzer_v3.html` = technical analyzer page
-- `/healthz` = quick health check
-
-## Update: AI analysis cache
-
-The main stock analyst page now keeps a short-term browser cache in `localStorage`.
-
-- Same stock symbol + same analysis tab will reuse the saved AI answer for 6 hours.
-- This reduces repeated Gemini API calls when searching the same stock again shortly after.
-- Users can click **重新分析** to ignore the cache and call AI again.
-- To change the cache duration, edit this line in `stock-analyst.html`:
-
-```js
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+```text
+GEMINI_API_KEY=your Gemini API key
+APP_PASSWORD=your login password
 ```
+
+Optional:
+
+```text
+APP_SECRET=any random long text
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+## What this version does
+
+- Keeps the same `/`, `/auth`, and `/api` flow as before.
+- Adds `/market-data` on the backend.
+- Before AI analysis, the backend tries to fetch:
+  - latest Yahoo Finance quote data
+  - Yahoo Finance fundamentals when available
+  - recent Google News RSS headlines
+- The frontend sends those real data points to Gemini, so the AI answer is based on the latest available external data instead of only model memory.
+- AI results are cached in the browser for 1 hour by stock + tab to avoid repeated Gemini calls.
+- Press **重新分析** to clear the current stock/tab cache and fetch fresh data again.
+
+## Important note
+
+Yahoo Finance and Google News are free public endpoints and can sometimes be delayed, rate-limited, or missing fields. The app shows N/A when a metric cannot be fetched.

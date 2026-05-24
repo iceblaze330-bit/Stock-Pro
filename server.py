@@ -4,8 +4,10 @@ import urllib.error
 import json
 import os
 import hashlib
+import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
@@ -51,6 +53,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._handle_auth()
         if path == "/api":
             return self._handle_api()
+        if path == "/market-data":
+            return self._handle_market_data()
         self.send_error(404, "Not found")
 
     def _read_json(self):
@@ -124,6 +128,149 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(err, status=e.code)
         except Exception as e:
             return self._json({"error": str(e)}, status=500)
+
+
+    def _handle_market_data(self):
+        if APP_PASSWORD and not self._is_authorized():
+            return self._json({"error": "Unauthorized. Please login again."}, status=401)
+        try:
+            body = self._read_json()
+        except ValueError as e:
+            return self._json({"error": str(e)}, status=400)
+
+        symbol = str(body.get("symbol", "")).strip().upper()
+        if not symbol:
+            return self._json({"error": "Missing stock symbol."}, status=400)
+
+        data = {
+            "symbol": symbol,
+            "fetchedAt": int(time.time() * 1000),
+            "quote": {},
+            "fundamentals": {},
+            "news": [],
+            "warnings": [],
+            "sources": [
+                "Yahoo Finance quote API",
+                "Yahoo Finance quoteSummary API when available",
+                "Google News RSS"
+            ]
+        }
+
+        quote_data = self._fetch_yahoo_quote(symbol)
+        if quote_data:
+            data["quote"] = quote_data
+        else:
+            data["warnings"].append("Unable to fetch latest Yahoo quote data.")
+
+        fundamentals = self._fetch_yahoo_fundamentals(symbol)
+        if fundamentals:
+            data["fundamentals"] = fundamentals
+        else:
+            data["warnings"].append("Unable to fetch Yahoo fundamentals. Some metrics may be unavailable.")
+
+        news = self._fetch_google_news(symbol)
+        if news:
+            data["news"] = news
+        else:
+            data["warnings"].append("Unable to fetch Google News headlines.")
+
+        return self._json(data)
+
+    def _http_json(self, url, timeout=12):
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json,text/plain,*/*",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def _fetch_yahoo_quote(self, symbol):
+        try:
+            url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=" + quote(symbol)
+            js = self._http_json(url)
+            rows = js.get("quoteResponse", {}).get("result", [])
+            if not rows:
+                return {}
+            r = rows[0]
+            keys = [
+                "shortName", "longName", "regularMarketPrice", "regularMarketChange",
+                "regularMarketChangePercent", "regularMarketTime", "regularMarketDayHigh",
+                "regularMarketDayLow", "regularMarketVolume", "regularMarketPreviousClose",
+                "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "marketCap", "trailingPE",
+                "forwardPE", "epsTrailingTwelveMonths", "epsForward", "priceToBook",
+                "currency", "exchange", "quoteType"
+            ]
+            return {k: r.get(k) for k in keys if k in r}
+        except Exception as e:
+            print("Yahoo quote error:", e)
+            return {}
+
+    def _fetch_yahoo_fundamentals(self, symbol):
+        try:
+            modules = "defaultKeyStatistics,financialData,summaryDetail"
+            url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{quote(symbol)}?modules={modules}"
+            js = self._http_json(url)
+            result = js.get("quoteSummary", {}).get("result") or []
+            if not result:
+                return {}
+            root = result[0]
+            def raw(path):
+                cur = root
+                for part in path.split('.'):
+                    if not isinstance(cur, dict):
+                        return None
+                    cur = cur.get(part)
+                if isinstance(cur, dict) and "raw" in cur:
+                    return cur.get("raw")
+                return cur
+            fields = {
+                "profitMargins": raw("financialData.profitMargins"),
+                "grossMargins": raw("financialData.grossMargins"),
+                "operatingMargins": raw("financialData.operatingMargins"),
+                "returnOnEquity": raw("financialData.returnOnEquity"),
+                "revenueGrowth": raw("financialData.revenueGrowth"),
+                "earningsGrowth": raw("financialData.earningsGrowth"),
+                "totalRevenue": raw("financialData.totalRevenue"),
+                "freeCashflow": raw("financialData.freeCashflow"),
+                "totalDebt": raw("financialData.totalDebt"),
+                "debtToEquity": raw("financialData.debtToEquity"),
+                "currentRatio": raw("financialData.currentRatio"),
+                "targetMeanPrice": raw("financialData.targetMeanPrice"),
+                "recommendationKey": raw("financialData.recommendationKey"),
+                "dividendYield": raw("summaryDetail.dividendYield"),
+                "beta": raw("summaryDetail.beta"),
+                "bookValue": raw("defaultKeyStatistics.bookValue"),
+                "enterpriseValue": raw("defaultKeyStatistics.enterpriseValue"),
+            }
+            return {k:v for k,v in fields.items() if v is not None}
+        except Exception as e:
+            print("Yahoo fundamentals error:", e)
+            return {}
+
+    def _fetch_google_news(self, symbol):
+        try:
+            rss = "https://news.google.com/rss/search?q=" + quote(f"{symbol} stock") + "&hl=en-US&gl=US&ceid=US:en"
+            req = urllib.request.Request(rss, headers={"User-Agent":"Mozilla/5.0"}, method="GET")
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                xml_text = resp.read().decode("utf-8", errors="replace")
+            root = ET.fromstring(xml_text)
+            items = []
+            for item in root.findall(".//item")[:8]:
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                pub = (item.findtext("pubDate") or "").strip()
+                source = item.find("source")
+                source_name = source.text.strip() if source is not None and source.text else "Google News"
+                if title:
+                    items.append({"title": title, "source": source_name, "published": pub, "link": link})
+            return items
+        except Exception as e:
+            print("Google News error:", e)
+            return []
 
     def _is_authorized(self):
         auth = self.headers.get("Authorization", "")
