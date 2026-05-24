@@ -45,8 +45,6 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 #refresh-btn:disabled{opacity:.4;cursor:not-allowed}
 .cache-note{margin-bottom:12px;padding:9px 12px;border:1px solid rgba(0,255,136,.12);border-radius:8px;background:rgba(0,255,136,.04);font-size:.68rem;line-height:1.6;color:rgba(255,255,255,.42);font-family:'Space Mono',monospace}
 .cache-note strong{color:#00ff88;font-weight:700}
-.data-note{margin-bottom:12px;padding:12px;border:1px solid rgba(0,212,255,.14);border-radius:8px;background:rgba(0,212,255,.04);font-size:.72rem;line-height:1.75;color:rgba(255,255,255,.55)}
-.data-note b{color:#00d4ff}.data-note .news{margin-top:6px;color:rgba(255,255,255,.42)}
 #error-box{display:none;margin-top:12px;padding:11px 15px;background:rgba(255,60,60,.07);border:1px solid rgba(255,60,60,.2);border-radius:6px;color:#ff7070;font-size:.8rem;line-height:1.6}
 
 /* TABS */
@@ -414,7 +412,7 @@ function renderVerdict(d) {
 }
 
 function disclaimer() {
-  return `<div class="disclaimer">⚠️ 免責聲明：本分析由 AI 根據可取得的行情、財務與新聞資料生成；外部免費資料來源可能延遲、缺漏或暫時失敗。內容僅供參考，不構成投資建議。</div>`;
+  return `<div class="disclaimer">⚠️ 免責聲明：本分析由 AI 生成，僅供參考，不構成投資建議。投資有風險，請自行判斷並諮詢專業財務顧問。</div>`;
 }
 
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -423,8 +421,8 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 let activeTab = 0;
 let currentSym = '';
 const cache = {}; // memory cache: cache[sym][tabId] = { data, savedAt }
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour; keeps data fresh but avoids repeated short-term AI calls
-const CACHE_PREFIX = 'stock_ai_cache_v3_latest:';
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours; change this if you want shorter/longer cache
+const CACHE_PREFIX = 'stock_ai_cache_v2:';
 
 // ── DOM refs ──────────────────────────────────────────────────────
 const tickerInput = document.getElementById('ticker-input');
@@ -540,96 +538,6 @@ function doAnalyze() {
   runTab(sym, activeTab);
 }
 
-
-async function fetchMarketData(sym) {
-  const token = sessionStorage.getItem('authToken') || '';
-  const headers = {'Content-Type':'application/json'};
-  if (token) headers.Authorization = 'Bearer ' + token;
-  const resp = await fetch('/market-data', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ symbol: sym }),
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error(`資料抓取失敗 ${resp.status}: ${t}`);
-  }
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  return data;
-}
-
-function formatNum(v, money=false) {
-  if (v === null || v === undefined || v === '') return 'N/A';
-  const n = Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  const sign = money ? '$' : '';
-  if (Math.abs(n) >= 1e12) return sign + (n/1e12).toFixed(2) + 'T';
-  if (Math.abs(n) >= 1e9) return sign + (n/1e9).toFixed(2) + 'B';
-  if (Math.abs(n) >= 1e6) return sign + (n/1e6).toFixed(2) + 'M';
-  return sign + n.toLocaleString(undefined,{maximumFractionDigits:2});
-}
-
-function pct(v) {
-  if (v === null || v === undefined || v === '') return 'N/A';
-  const n = Number(v);
-  if (!Number.isFinite(n)) return String(v);
-  return (Math.abs(n) <= 2 ? n * 100 : n).toFixed(2) + '%';
-}
-
-function marketDataSummary(market) {
-  const q = market.quote || {};
-  const f = market.fundamentals || {};
-  const news = market.news || [];
-  return {
-    symbol: market.symbol,
-    fetchedAt: market.fetchedAt,
-    company: q.longName || q.shortName || market.symbol,
-    price: q.regularMarketPrice,
-    changePercent: q.regularMarketChangePercent,
-    marketCap: q.marketCap,
-    trailingPE: q.trailingPE,
-    forwardPE: q.forwardPE,
-    epsTTM: q.epsTrailingTwelveMonths,
-    revenueTTM: f.totalRevenue,
-    grossMargin: f.grossMargins,
-    operatingMargin: f.operatingMargins,
-    profitMargin: f.profitMargins,
-    roe: f.returnOnEquity,
-    debtToEquity: f.debtToEquity,
-    freeCashflow: f.freeCashflow,
-    targetMeanPrice: f.targetMeanPrice,
-    recommendation: f.recommendationKey,
-    week52High: q.fiftyTwoWeekHigh,
-    week52Low: q.fiftyTwoWeekLow,
-    volume: q.regularMarketVolume,
-    recentNews: news.slice(0, 6).map(n => ({title:n.title, source:n.source, published:n.published})),
-    warnings: market.warnings || [],
-    sources: market.sources || []
-  };
-}
-
-function buildPromptWithData(tab, sym, market) {
-  const summary = marketDataSummary(market);
-  return `${tab.prompt(sym)}\n\n以下是真實外部資料，請優先根據這些資料分析；不要捏造未提供的數字。若資料是 N/A 或缺漏，請清楚說明「資料來源未提供」。\n\nREALTIME_DATA_JSON:\n${JSON.stringify(summary, null, 2)}\n\n請在分析中清楚區分：哪些是上述真實資料支持，哪些是 AI 根據商業模式與產業做出的推論。`;
-}
-
-function renderDataNote(market, cached) {
-  if (!market) return '';
-  const q = market.quote || {};
-  const f = market.fundamentals || {};
-  const news = market.news || [];
-  const fetched = market.fetchedAt ? new Date(market.fetchedAt).toLocaleString('zh-TW') : 'N/A';
-  const name = esc(q.longName || q.shortName || market.symbol || currentSym);
-  const headlines = news.slice(0, 3).map(n => `• ${esc(n.title || '')}`).join('<br>');
-  return `<div class="data-note">
-    <b>真實資料已加入 AI 分析</b>　${name}　｜　資料抓取時間：${esc(fetched)}　｜　${cached ? '使用快取分析' : '最新抓取後分析'}<br>
-    價格：${esc(formatNum(q.regularMarketPrice, true))}　漲跌：${esc(pct(q.regularMarketChangePercent))}　P/E：${esc(formatNum(q.trailingPE))}　EPS(TTM)：${esc(formatNum(q.epsTrailingTwelveMonths, true))}　市值：${esc(formatNum(q.marketCap, true))}<br>
-    營收(TTM)：${esc(formatNum(f.totalRevenue, true))}　毛利率：${esc(pct(f.grossMargins))}　營業利益率：${esc(pct(f.operatingMargins))}　ROE：${esc(pct(f.returnOnEquity))}　FCF：${esc(formatNum(f.freeCashflow, true))}
-    ${headlines ? `<div class="news">近期新聞：<br>${headlines}</div>` : ''}
-  </div>`;
-}
-
 async function runTab(sym, tabId, options = {}) {
   // TradingView tab — no API call needed
   if (tabId === 7) {
@@ -640,32 +548,29 @@ async function runTab(sym, tabId, options = {}) {
   if (!options.force) {
     const cached = getCachedResult(sym, tabId);
     if (cached) {
-      const analysis = cached.data.analysis || cached.data;
-      showResult(analysis, tabId, { cached: true, savedAt: cached.savedAt, market: cached.data.market });
+      showResult(cached.data, tabId, { cached: true, savedAt: cached.savedAt });
       return;
     }
   }
   const tab = TABS[tabId];
-  showLoading(tab.loadingMsg + '（抓取最新行情與新聞…）');
+  showLoading(tab.loadingMsg);
 
   try {
-    const market = await fetchMarketData(sym);
-    showLoading(tab.loadingMsg + '（AI 分析真實資料…）');
     const token = sessionStorage.getItem('authToken') || '';
     const headers = {'Content-Type':'application/json'};
     if (token) headers.Authorization = 'Bearer ' + token;
     const resp = await fetch('/api', {
       method:'POST',
       headers,
-      body: JSON.stringify({ system: tab.system, user: buildPromptWithData(tab, sym, market) }),
+      body: JSON.stringify({ system: tab.system, user: tab.prompt(sym) }),
     });
     if (!resp.ok) { const t=await resp.text(); throw new Error(`API 錯誤 ${resp.status}: ${t}`); }
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     const raw = data.text || '';
     const parsed = extractJSON(raw);
-    const saved = saveCachedResult(sym, tabId, { analysis: parsed, market });
-    showResult(parsed, tabId, { cached: false, savedAt: saved.savedAt, market });
+    const saved = saveCachedResult(sym, tabId, parsed);
+    showResult(parsed, tabId, { cached: false, savedAt: saved.savedAt });
   } catch(e) {
     hideLoading();
     showError('分析失敗：' + e.message + '，請再試一次');
@@ -839,9 +744,8 @@ function showResult(data, tabId, meta = {}) {
   hideLoading();
   refreshBtn.style.display = currentSym ? 'inline-flex' : 'none';
   const html = TABS[tabId].render(data);
-  const note = meta.savedAt ? `<div class="cache-note"><strong>${meta.cached ? '使用快取' : '新分析已記錄'}</strong>　${currentSym} / ${TABS[tabId].label}　記錄時間：${formatCacheTime(meta.savedAt)}　｜　1 小時內再查同樣項目不會重新呼叫 AI。需要最新資料請按「重新分析」。</div>` : '';
-  const dataNote = renderDataNote(meta.market, meta.cached);
-  resultPanel.innerHTML = note + dataNote + html;
+  const note = meta.savedAt ? `<div class="cache-note"><strong>${meta.cached ? '使用快取' : '新分析已記錄'}</strong>　${currentSym} / ${TABS[tabId].label}　記錄時間：${formatCacheTime(meta.savedAt)}　｜　6 小時內再查同樣項目不會重新呼叫 AI。需要最新答案請按「重新分析」。</div>` : '';
+  resultPanel.innerHTML = note + html;
   resultPanel.style.display = 'block';
   setTimeout(() => {
     resultPanel.querySelectorAll('.section-card').forEach(el => el.classList.add('visible'));
